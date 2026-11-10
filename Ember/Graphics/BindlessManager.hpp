@@ -3,6 +3,7 @@
 #include <array>
 #include <mutex>
 
+#include "Com.hpp"
 #include "DeviceHandle.hpp"
 #include "Util/DirectXHeaders.hpp"
 #include "Util/RabbitPullingFreeList.hpp"
@@ -12,31 +13,30 @@ namespace Ember
 
 class BindlessManager
 {
-  ComPtr<ID3D12Device2>        m_Device;
+  ID3D12Device2*            m_Device;
 
-  RabbitPullingFreeList        m_ResourceFreeList;
-  ComPtr<ID3D12DescriptorHeap> m_ResourceDescriptorHeap;
-  std::mutex                   m_ResourceDescriptorLock;
-  uint32_t                     m_ResourceDescriptorIncrement;
+  RabbitPullingFreeList     m_ResourceFreeList;
+  Com<ID3D12DescriptorHeap> m_ResourceDescriptorHeap;
+  std::mutex                m_ResourceDescriptorLock;
+  uint32_t                  m_ResourceDescriptorIncrement;
 
-  RabbitPullingFreeList        m_SamplerFreeList;
-  ComPtr<ID3D12DescriptorHeap> m_SamplerDescriptorHeap;
-  std::mutex                   m_SamplerDescriptorLock;
-  uint32_t                     m_SamplerDescriptorIncrement;
+  RabbitPullingFreeList     m_SamplerFreeList;
+  Com<ID3D12DescriptorHeap> m_SamplerDescriptorHeap;
+  std::mutex                m_SamplerDescriptorLock;
+  uint32_t                  m_SamplerDescriptorIncrement;
 
 public:
   BindlessManager() = default;
   BindlessManager(
-      ComPtr<ID3D12Device2>        device,
-      ComPtr<ID3D12DescriptorHeap> resource_descriptor_heap,
-      uint32_t                     resource_descriptor_increment,
-      uint32_t                     max_resources,
-      ComPtr<ID3D12DescriptorHeap> sampler_descriptor_heap,
-      uint32_t                     sampler_descriptor_increment,
-      uint32_t                     max_samplers );
+      ID3D12Device2&            device,
+      Com<ID3D12DescriptorHeap> resource_descriptor_heap,
+      uint32_t                  resource_descriptor_increment,
+      uint32_t                  max_resources,
+      Com<ID3D12DescriptorHeap> sampler_descriptor_heap,
+      uint32_t                  sampler_descriptor_increment,
+      uint32_t                  max_samplers );
 
-  static void Create(
-      BindlessManager* bindless, ComPtr<ID3D12Device2> device, uint32_t max_resources, uint32_t max_samplers );
+  static void Create( BindlessManager* bindless, ID3D12Device2& device, uint32_t max_resources, uint32_t max_samplers );
 
   [[nodiscard]] CBVHandle CreateDescriptorHandle( D3D12_CONSTANT_BUFFER_VIEW_DESC const& cbv_desc );
   [[nodiscard]] SRVHandle CreateDescriptorHandle(
@@ -56,7 +56,7 @@ public:
   void                                               Free( RawDescriptorHandle handle );
   void                                               Free( SamplerHandle handle );
 
-  [[nodiscard]] std::array<ID3D12DescriptorHeap*, 2> GetBindlessDescriptorHeaps() const;
+  [[nodiscard]] std::array<ID3D12DescriptorHeap*, 2> GetBindlessDescriptorHeaps();
 
   BindlessManager( BindlessManager const& other )                = delete;
   BindlessManager( BindlessManager&& other ) noexcept            = delete;

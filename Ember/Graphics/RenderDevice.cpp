@@ -269,7 +269,7 @@ void Ember::RenderDevice::Create( RenderDevice* render_device, HWND window_handl
   }
 
   auto bindless_manager = std::make_unique_for_overwrite<BindlessManager>();
-  BindlessManager::Create( bindless_manager.get(), device, 10'000, 1000 );
+  BindlessManager::Create( bindless_manager.get(), *device.Get(), 10'000, 1000 );
 
   // Queue Creation
   Queue direct_context;
