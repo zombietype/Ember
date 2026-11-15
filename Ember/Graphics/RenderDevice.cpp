@@ -64,6 +64,7 @@ D3D_ROOT_SIGNATURE_VERSION Ember::RenderDevice::FetchHighestRootSignatureVersion
 }
 
 Ember::RenderDevice::RenderDevice(
+    ComPtr<IDXGIAdapter4>            adapter,
     ComPtr<ID3D12Device5>            device,
     ComPtr<D3D12MA::Allocator>       allocator,
     uint32_t const                   swapchain_width,
@@ -73,7 +74,8 @@ Ember::RenderDevice::RenderDevice(
     std::unique_ptr<BindlessManager> bindless_manager,
     Queue                            direct_queue,
     bool const                       is_tearing_supported )
-  : m_Device{ std::move( device ) }
+  : m_Adapter{ std::move( adapter ) }
+  , m_Device{ std::move( device ) }
   , m_Allocator{ std::move( allocator ) }
   , m_SwapchainWidth{ swapchain_width }
   , m_SwapchainHeight{ swapchain_height }
@@ -102,6 +104,11 @@ Ember::RenderDevice::RenderDevice(
   {
     m_VsyncAndTearing = m_VsyncAndTearing | kSupportTearingBit;
   }
+}
+
+IDXGIAdapter4* Ember::RenderDevice::GetAdapter() const noexcept
+{
+  return m_Adapter.Get();
 }
 
 ID3D12Device5* Ember::RenderDevice::GetDevice() const noexcept
@@ -322,6 +329,7 @@ void Ember::RenderDevice::Create( RenderDevice* render_device, HWND window_handl
   }
 
   new ( render_device ) RenderDevice{
+    std::move( adapter ),
     std::move( device ),
     std::move( allocator ),
     width,

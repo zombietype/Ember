@@ -38,6 +38,7 @@ public:
 
 private:
   // Device and queues.
+  ComPtr<IDXGIAdapter4>      m_Adapter;
   ComPtr<ID3D12Device5>      m_Device;
   ComPtr<D3D12MA::Allocator> m_Allocator;
 
@@ -72,6 +73,7 @@ private:
 public:
   RenderDevice() = default;
   RenderDevice(
+      ComPtr<IDXGIAdapter4>            adapter,
       ComPtr<ID3D12Device5>            device,
       ComPtr<D3D12MA::Allocator>       allocator,
       uint32_t                         swapchain_width,
@@ -82,6 +84,7 @@ public:
       Queue                            direct_queue,
       bool                             is_tearing_supported );
 
+  [[nodiscard]] IDXGIAdapter4*             GetAdapter() const noexcept;
   [[nodiscard]] ID3D12Device5*             GetDevice() const noexcept;
   [[nodiscard]] D3D12MA::Allocator*        GetAllocator() const noexcept;
   [[nodiscard]] ID3D12CommandQueue*        GetDirectQueue() const noexcept;

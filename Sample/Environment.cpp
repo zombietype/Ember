@@ -1,3 +1,21 @@
+// ===========================================================================
+//
+// Copyright 2026 Anish Bhobe
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// ===========================================================================
+
 #include "Environment.hpp"
 
 #include <Graphics/RenderDevice.hpp>
@@ -667,16 +685,23 @@ bool Ember::Environment::Bake(
 
 bool Ember::Environment::TryLoadFromFile( Environment* env, LoadFromFile const& args )
 {
-  RenderDevice*  render_device  = args.RenderDevice;
-  TextureLoader* texture_loader = args.TextureLoader;
-  char const*    env_map_file   = args.FileName;
+  ASSERT( args.RenderDevice );
+  ASSERT( args.TextureLoader );
+  ASSERT( args.MipMapGenerator );
+  ASSERT( args.FileName );
 
-  Texture        environment;
-  if ( not texture_loader->TryLoadTexture( &environment, env_map_file ) ) return false;
-  render_device->WaitOn( texture_loader->EndBatch() );
+  Texture environment;
+  if ( not args.TextureLoader->TryLoadTexture( &environment, args.FileName ) ) return false;
+  args.RenderDevice->WaitOn( args.TextureLoader->EndBatch() );
 
   return TryLoadFromEqRect(
-      env, { render_device, args.World, texture_loader->GetMipMapper(), std::move( environment ) } );
+      env,
+      {
+          .RenderDevice  = args.RenderDevice,
+          .World         = args.World,
+          .MipMapper     = args.MipMapGenerator,
+          .EqrectTexture = std::move( environment ),
+      } );
 }
 
 bool Ember::Environment::TryLoadFromEqRect( Environment* env, LoadFromEqRect const& args )
@@ -686,10 +711,15 @@ bool Ember::Environment::TryLoadFromEqRect( Environment* env, LoadFromEqRect con
   MipMapGenerator* mip_mapper    = args.MipMapper;
   Texture const&   environment   = args.EqrectTexture;
 
-  Queue            queue         = render_device->CreateQueue( D3D12_COMMAND_LIST_TYPE_COMPUTE );
-  auto             command_list  = queue.GetCommandList();
+  ASSERT( render_device );
+  ASSERT( world );
+  ASSERT( mip_mapper );
+  ASSERT( environment );
 
-  Pipelines        pipelines;
+  Queue     queue        = render_device->CreateQueue( D3D12_COMMAND_LIST_TYPE_COMPUTE );
+  auto      command_list = queue.GetCommandList();
+
+  Pipelines pipelines;
   if ( not CreatePipelines( &pipelines, render_device ) ) return false;
 
   EnvContext const context{

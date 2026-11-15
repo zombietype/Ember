@@ -1,15 +1,30 @@
+// ===========================================================================
+//
+// Copyright 2026 Anish Bhobe
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// ===========================================================================
+
 #pragma once
 
 #include <memory_resource>
-#include <span>
 #include <string>
 #include <unordered_map>
 
 #include <Graphics/CommandList.hpp>
 #include <Graphics/Queue.hpp>
 #include <Graphics/Texture.hpp>
-
-#include "MipMapGenerator.hpp"
 
 namespace Ember
 {
@@ -27,19 +42,24 @@ class TextureLoader
   struct UploadBatch
   {
     using BarrierList = std::pmr::deque<std::pair<Texture, D3D12_RESOURCE_STATES>>;
-    BarrierList    Barriers;
-    Queue::Receipt Receipt;
+    BarrierList                               Barriers;
+    std::pmr::deque<Com<D3D12MA::Allocation>> Allocations;
+    Queue::Receipt                            Receipt;
 
     UploadBatch() = default;
     explicit UploadBatch( Queue::Receipt receipt, std::pmr::polymorphic_allocator<> const& pool_allocator );
     void PushTextureStateChange( Texture dest, D3D12_RESOURCE_STATES const final_state );
-    void FlushPendingBarriers( std::vector<D3D12_RESOURCE_BARRIER>* barriers );
+    void Flush( std::vector<D3D12_RESOURCE_BARRIER>* barriers );
+
+    UploadBatch( UploadBatch const& other )                = delete;
+    UploadBatch( UploadBatch&& other ) noexcept            = default;
+    UploadBatch& operator=( UploadBatch const& other )     = delete;
+    UploadBatch& operator=( UploadBatch&& other ) noexcept = default;
   };
 
   using TextureCache = std::pmr::unordered_map<std::pmr::string, Texture>;
 
   RenderDevice*                          m_RenderDevice;
-  MipMapGenerator*                       m_MipMapGenerator;
 
   std::pmr::unsynchronized_pool_resource m_CachePool;
   TextureCache                           m_Cache;
@@ -52,36 +72,29 @@ class TextureLoader
   uint32_t                               m_CurrentUploadBatch{ 0 };
   CommandList                            m_CurrentCommandList;
   uint32_t                               m_CurrentUploadBatchSize{ 0 };
+  Com<D3D12MA::Allocator>                m_StagingAllocator;
 
   std::vector<D3D12_RESOURCE_BARRIER>    m_PendingBarriers;
 
 
   //
   bool TryLoadImpl(
-      Texture*                     texture,
-      char const*                  id,
-      DirectX::TexMetadata const&  metadata,
-      DirectX::ScratchImage const& scratch_image,
-      ColorSpaceOverride const     color_space_override,
-      D3D12_RESOURCE_STATES        final_state );
+      Texture* texture, char const* id, DirectX::ScratchImage scratch_image, D3D12_RESOURCE_STATES final_state );
 
 public:
   TextureLoader() = default;
 
   TextureLoader(
-      RenderDevice*          render_device,
-      MipMapGenerator*       mipmap_generator,
-      std::shared_ptr<Queue> copy_context,
-      uint32_t               upload_frame_count );
+      RenderDevice*           render_device,
+      Com<D3D12MA::Allocator> allocator,
+      std::shared_ptr<Queue>  copy_context,
+      uint32_t                upload_frame_count );
 
   static bool Create(
       TextureLoader*         loader,
       RenderDevice*          render_device,
-      MipMapGenerator*       mipmap_generator,
       std::shared_ptr<Queue> compute_context,
       uint32_t               upload_frame_count );
-
-  [[nodiscard]] MipMapGenerator* GetMipMapper() const;
 
   // Loaders
   bool TryLoadTexture(

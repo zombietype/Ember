@@ -1,3 +1,21 @@
+// ===========================================================================
+//
+// Copyright 2026 Anish Bhobe
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+// ===========================================================================
+
 #include "TextureLoader.hpp"
 
 #include <filesystem>
@@ -13,7 +31,7 @@
 
 Ember::TextureLoader::UploadBatch::UploadBatch(
     Queue::Receipt receipt, std::pmr::polymorphic_allocator<> const& pool_allocator )
-  : Barriers{ pool_allocator }, Receipt{ std::move( receipt ) }
+  : Barriers{ pool_allocator }, Allocations{ pool_allocator }, Receipt{ std::move( receipt ) }
 {}
 
 void Ember::TextureLoader::UploadBatch::PushTextureStateChange( Texture dest, D3D12_RESOURCE_STATES const final_state )
@@ -21,7 +39,7 @@ void Ember::TextureLoader::UploadBatch::PushTextureStateChange( Texture dest, D3
   Barriers.emplace_back( dest, final_state );
 }
 
-void Ember::TextureLoader::UploadBatch::FlushPendingBarriers( std::vector<D3D12_RESOURCE_BARRIER>* barriers )
+void Ember::TextureLoader::UploadBatch::Flush( std::vector<D3D12_RESOURCE_BARRIER>* barriers )
 {
   std::ranges::transform(
       Barriers,
@@ -35,14 +53,17 @@ void Ember::TextureLoader::UploadBatch::FlushPendingBarriers( std::vector<D3D12_
       } );
 
   Barriers.clear();
+  Allocations.clear();
 }
 
 Ember::TextureLoader::TextureLoader(
-    RenderDevice*          render_device,
-    MipMapGenerator*       mipmap_generator,
-    std::shared_ptr<Queue> copy_context,
-    uint32_t const         upload_frame_count )
-  : m_RenderDevice{ render_device }, m_CopyContext{ std::move( copy_context ) }, m_MipMapGenerator{ mipmap_generator }
+    RenderDevice*           render_device,
+    Com<D3D12MA::Allocator> allocator,
+    std::shared_ptr<Queue>  copy_context,
+    uint32_t const          upload_frame_count )
+  : m_RenderDevice{ render_device }
+  , m_CopyContext{ std::move( copy_context ) }
+  , m_StagingAllocator{ std::move( allocator ) }
 {
   m_UploadBatches.reserve( upload_frame_count );
   Queue::Receipt initial = m_CopyContext->CreateReceipt();
@@ -56,7 +77,6 @@ Ember::TextureLoader::TextureLoader(
 bool Ember::TextureLoader::Create(
     TextureLoader*         loader,
     RenderDevice*          render_device,
-    MipMapGenerator*       mipmap_generator,
     std::shared_ptr<Queue> compute_context,
     uint32_t const         upload_frame_count )
 {
@@ -66,12 +86,20 @@ bool Ember::TextureLoader::Create(
     return false;
   }
 
+  D3D12MA::ALLOCATOR_DESC const alloc_desc = {
+    .Flags    = D3D12MA_RECOMMENDED_ALLOCATOR_FLAGS,
+    .pDevice  = render_device->GetDevice(),
+    .pAdapter = render_device->GetAdapter(),
+  };
+  Com<D3D12MA::Allocator> alloc;
+  ERR_FAIL_RET_F( D3D12MA::CreateAllocator( &alloc_desc, alloc.WritePtr() ) );
+
   // We need COMPUTE instead of COPY due to the mip-mapping.
   // Ideally, we want to kick the job to an async compute queue.
 
   new ( loader ) TextureLoader{
     render_device,
-    mipmap_generator,
+    std::move( alloc ),
     std::move( compute_context ),
     upload_frame_count,
   };
@@ -79,38 +107,31 @@ bool Ember::TextureLoader::Create(
   return true;
 }
 
-Ember::MipMapGenerator* Ember::TextureLoader::GetMipMapper() const
-{
-  return m_MipMapGenerator;
-}
-
 bool Ember::TextureLoader::TryLoadImpl(
-    Texture*                     texture,
-    char const*                  id,
-    DirectX::TexMetadata const&  metadata,
-    DirectX::ScratchImage const& scratch_image,
-    ColorSpaceOverride const     color_space_override,
-    D3D12_RESOURCE_STATES        final_state )
+    Texture* texture, char const* id, DirectX::ScratchImage scratch_image, D3D12_RESOURCE_STATES final_state )
 {
   PIXScopedEvent( m_CurrentCommandList.Get(), PIX_COLOR_DEFAULT, "TextureLoader::TryLoadImpl %s", id );
 
-  std::span const images{ scratch_image.GetImages(), scratch_image.GetImageCount() };
-
-  DXGI_FORMAT     format = metadata.format;
-  switch ( color_space_override )
+  // Mipmapping
   {
-    case ColorSpaceOverride::kLinear:
-      format = DirectX::MakeLinear( format );
-      break;
-    case ColorSpaceOverride::kSrgb:
-      format = DirectX::MakeSRGB( format );
-      break;
-    case ColorSpaceOverride::kNone:
-      break;
+    DirectX::ScratchImage mipmapped;
+    DirectX::GenerateMipMaps(
+        scratch_image.GetImages(),
+        scratch_image.GetImageCount(),
+        scratch_image.GetMetadata(),
+        DirectX::TEX_FILTER_DEFAULT,
+        0,
+        mipmapped );
+
+    scratch_image = std::move( mipmapped );
   }
 
+  std::span const images{ scratch_image.GetImages(), scratch_image.GetImageCount() };
+
+  auto const&     metadata = scratch_image.GetMetadata();
+
   new ( texture ) Texture{ m_RenderDevice->CreateTexture2D( {
-      .Format    = format,
+      .Format    = metadata.format,
       .Width     = ( uint32_t )metadata.width,
       .Height    = ( uint32_t )metadata.height,
       .InitState = D3D12_RESOURCE_STATE_COPY_DEST,
@@ -120,10 +141,9 @@ bool Ember::TextureLoader::TryLoadImpl(
   MultiByteToWideChar( CP_UTF8, MB_ERR_INVALID_CHARS, id, -1, wide_id, 512 );
   ERR_FAIL_RET_V( texture->GetTexture()->SetName( wide_id ), false );
 
-  uint64_t const              req_size = GetRequiredIntermediateSize( texture->GetTexture(), 0, 1 );
+  uint64_t const           req_size = GetRequiredIntermediateSize( texture->GetTexture(), 0, CountOf( images ) );
 
-  ComPtr<ID3D12Resource>      staging_res;
-  ComPtr<D3D12MA::Allocation> staging_alloc;
+  Com<D3D12MA::Allocation> staging_alloc;
   {
     CD3DX12_RESOURCE_DESC const    resource_desc   = CD3DX12_RESOURCE_DESC::Buffer( req_size );
 
@@ -133,23 +153,16 @@ bool Ember::TextureLoader::TryLoadImpl(
     };
 
     ERR_FAIL_RET_V(
-        m_RenderDevice->GetAllocator()->CreateResource(
+        m_StagingAllocator->CreateResource(
             &allocation_desc,
             &resource_desc,
             D3D12_RESOURCE_STATE_GENERIC_READ,
             nullptr,
-            staging_alloc.GetAddressOf(),
-            IID_PPV_ARGS( &staging_res ) ),
+            staging_alloc.WritePtr(),
+            IID_NULL,
+            nullptr ),
         false );
-
-    m_CurrentCommandList.Track( std::move( staging_alloc ) );
   }
-
-  m_CurrentCommandList.Track( staging_res );
-
-  wchar_t staging_name[512];
-  FormatTo( staging_name, L"Staging: {}", wide_id );
-  ERR_FAIL_RET_V( staging_res->SetName( staging_name ), false );
 
   auto lock_guard = std::lock_guard( m_LoadLock );
   // [1] Needs to run on a single thread from here.
@@ -170,18 +183,14 @@ bool Ember::TextureLoader::TryLoadImpl(
   UpdateSubresources(
       m_CurrentCommandList.Get(),
       texture->GetTexture(),
-      staging_res.Get(),
+      staging_alloc->GetResource(),
       0,
       0,
       CountOf( subresources ),
       DataOf( subresources ) );
 
   m_UploadBatches[m_CurrentUploadBatch].PushTextureStateChange( *texture, final_state );
-
-  if ( not m_MipMapGenerator->TryGenerateMipMaps( &m_CurrentCommandList, texture ) )
-  {
-    return false;
-  }
+  m_UploadBatches[m_CurrentUploadBatch].Allocations.push_back( std::move( staging_alloc ) );
 
   m_Cache[id] = *texture;
 
@@ -198,6 +207,7 @@ bool Ember::TextureLoader::TryLoadTexture(
   if ( it != m_Cache.end() )
   {
     new ( texture ) Texture{ it->second };
+    return true;
   }
 
   std::filesystem::path const file_path( filename );
@@ -225,7 +235,7 @@ bool Ember::TextureLoader::TryLoadTexture(
     ERR_FAIL_RET_F( LoadFromWICFile( wide_filename, flags, &metadata, scratch_image ) );
   }
 
-  return TryLoadImpl( texture, filename, metadata, scratch_image, color_space_override, final_state );
+  return TryLoadImpl( texture, filename, std::move( scratch_image ), final_state );
 }
 
 bool Ember::TextureLoader::TryLoadTextureFromData(
@@ -250,7 +260,7 @@ bool Ember::TextureLoader::TryLoadTextureFromData(
                                    DirectX::WIC_FLAGS_FORCE_RGB;
   ERR_FAIL_RET_V( DirectX::LoadFromWICMemory( data, data_size, flags, &metadata, scratch_image ), false );
 
-  return TryLoadImpl( texture, id, metadata, scratch_image, color_space_override, final_state );
+  return TryLoadImpl( texture, id, std::move( scratch_image ), final_state );
 }
 
 Ember::Queue::Receipt Ember::TextureLoader::EndBatch()
@@ -266,7 +276,7 @@ Ember::Queue::Receipt Ember::TextureLoader::EndBatch()
 
   auto lock_guard = std::lock_guard( m_LoadLock );
 
-  m_UploadBatches[m_CurrentUploadBatch].FlushPendingBarriers( &m_PendingBarriers );
+  m_UploadBatches[m_CurrentUploadBatch].Flush( &m_PendingBarriers );
 
   m_CurrentCommandList     = m_CopyContext->GetCommandList();
   m_CurrentUploadBatchSize = 0;
@@ -285,7 +295,7 @@ void Ember::TextureLoader::Update()
     {
       auto lock_guard = std::lock_guard( m_LoadLock );
 
-      batch.FlushPendingBarriers( &m_PendingBarriers );
+      batch.Flush( &m_PendingBarriers );
     }
   }
 }
