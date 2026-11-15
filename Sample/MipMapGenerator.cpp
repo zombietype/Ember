@@ -64,22 +64,17 @@ bool Ember::MipMapGenerator::TryGenerateMipMaps( CommandList* command_list, Text
   ComPtr<ID3D12Resource> uav_capable;
 
   // Grab the 'necessary' info from texture, and copy it to the 'alias' resource.
-#if not defined( RENDERDOC_COMPAT )
   D3D12MA::Allocation* allocation = texture->GetAllocation();
   ID3D12Resource*      resource   = allocation->GetResource();
-#else
-  ID3D12Resource* resource = texture->GetTexture();
-#endif
 
-  D3D12_RESOURCE_DESC desc      = resource->GetDesc();
-  DXGI_FORMAT         in_format = desc.Format;
+  D3D12_RESOURCE_DESC  desc       = resource->GetDesc();
+  DXGI_FORMAT          in_format  = desc.Format;
 
-  desc.Flags  &= ~( D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL );
-  desc.Flags  |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-  desc.Format  = DirectX::MakeLinear( desc.Format );
+  desc.Flags            &= ~( D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL );
+  desc.Flags            |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  desc.Format            = DirectX::MakeLinear( desc.Format );
 
-#if not defined( RENDERDOC_COMPAT )
-  bool const is_aliased = allocation->GetHeap() != nullptr;
+  bool const is_aliased  = allocation->GetHeap() != nullptr;
   if ( is_aliased )
   {
     // Placed resource can be aliased.
@@ -106,18 +101,6 @@ bool Ember::MipMapGenerator::TryGenerateMipMaps( CommandList* command_list, Text
         false );
     command_list->Track( std::move( copy_alloc ) );
   }
-#else
-  CD3DX12_HEAP_PROPERTIES properties{ D3D12_HEAP_TYPE_DEFAULT };
-  ERR_FAIL_RET_V(
-      m_RenderDevice->GetDevice()->CreateCommittedResource(
-          &properties,
-          D3D12_HEAP_FLAG_NONE,
-          &desc,
-          D3D12_RESOURCE_STATE_COPY_DEST,
-          nullptr,
-          IID_PPV_ARGS( &uav_capable ) ),
-      false );
-#endif
 
   ERR_FAIL_RET_V( uav_capable->SetName( L"UAV Alias" ), false );
   {
@@ -126,14 +109,12 @@ bool Ember::MipMapGenerator::TryGenerateMipMaps( CommandList* command_list, Text
     command_list->ResourceBarrier( transition );
   }
 
-#if not defined( RENDERDOC_COMPAT )
   if ( is_aliased )
   {
     CD3DX12_RESOURCE_BARRIER aliasing_barrier =
         CD3DX12_RESOURCE_BARRIER::Aliasing( allocation->GetResource(), uav_capable.Get() );
     command_list->ResourceBarrier( aliasing_barrier );
   }
-#endif
 
   command_list->CopyResource( uav_capable.Get(), resource );
 
@@ -196,12 +177,10 @@ bool Ember::MipMapGenerator::TryGenerateMipMaps( CommandList* command_list, Text
   }
   command_list->CopyResource( resource, uav_capable.Get() );
 
-#if not defined( RENDERDOC_COMPAT )
   if ( is_aliased )
   {
     command_list->ResourceBarrier( CD3DX12_RESOURCE_BARRIER::Aliasing( uav_capable.Get(), resource ) );
   }
-#endif
 
   return true;
 }
@@ -212,22 +191,17 @@ bool Ember::MipMapGenerator::TryGenerateMipMapCube( CommandList* command_list, T
   auto const             texture_resource_state = texture->GetCurrentState();
 
   // Grab the 'necessary' info from texture, and copy it to the 'alias' resource.
-#if not defined( RENDERDOC_COMPAT )
   D3D12MA::Allocation* allocation = texture->GetAllocation();
   ID3D12Resource*      resource   = allocation->GetResource();
-#else
-  ID3D12Resource* resource = texture->GetTexture();
-#endif
 
-  D3D12_RESOURCE_DESC desc      = resource->GetDesc();
-  DXGI_FORMAT const   in_format = desc.Format;
+  D3D12_RESOURCE_DESC  desc       = resource->GetDesc();
+  DXGI_FORMAT const    in_format  = desc.Format;
 
-  desc.Flags  &= ~( D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL );
-  desc.Flags  |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-  desc.Format  = DirectX::MakeLinear( desc.Format );
+  desc.Flags            &= ~( D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL );
+  desc.Flags            |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+  desc.Format            = DirectX::MakeLinear( desc.Format );
 
-#if not defined( RENDERDOC_COMPAT )
-  bool const is_aliased = allocation->GetHeap() != nullptr;
+  bool const is_aliased  = allocation->GetHeap() != nullptr;
   if ( is_aliased )
   {
     // Placed resource can be aliased.
@@ -254,18 +228,6 @@ bool Ember::MipMapGenerator::TryGenerateMipMapCube( CommandList* command_list, T
         false );
     command_list->Track( std::move( copy_alloc ) );
   }
-#else
-  CD3DX12_HEAP_PROPERTIES properties{ D3D12_HEAP_TYPE_DEFAULT };
-  ERR_FAIL_RET_V(
-      m_RenderDevice->GetDevice()->CreateCommittedResource(
-          &properties,
-          D3D12_HEAP_FLAG_NONE,
-          &desc,
-          D3D12_RESOURCE_STATE_COPY_DEST,
-          nullptr,
-          IID_PPV_ARGS( &uav_capable ) ),
-      false );
-#endif
 
   ERR_FAIL_RET_V( uav_capable->SetName( L"UAV Alias" ), false );
   if ( texture_resource_state != D3D12_RESOURCE_STATE_COPY_SOURCE )
@@ -275,14 +237,12 @@ bool Ember::MipMapGenerator::TryGenerateMipMapCube( CommandList* command_list, T
     command_list->ResourceBarrier( transition );
   }
 
-#if not defined( RENDERDOC_COMPAT )
   if ( is_aliased )
   {
     CD3DX12_RESOURCE_BARRIER aliasing_barrier =
         CD3DX12_RESOURCE_BARRIER::Aliasing( allocation->GetResource(), uav_capable.Get() );
     command_list->ResourceBarrier( aliasing_barrier );
   }
-#endif
 
   command_list->CopyResource( uav_capable.Get(), resource );
 
@@ -345,13 +305,11 @@ bool Ember::MipMapGenerator::TryGenerateMipMapCube( CommandList* command_list, T
   }
   command_list->CopyResource( resource, uav_capable.Get() );
 
-#if not defined( RENDERDOC_COMPAT )
   if ( is_aliased )
   {
     CD3DX12_RESOURCE_BARRIER reverse_aliasing = CD3DX12_RESOURCE_BARRIER::Aliasing( uav_capable.Get(), resource );
     command_list->ResourceBarrier( reverse_aliasing );
   }
-#endif
 
   if ( texture_resource_state != D3D12_RESOURCE_STATE_COPY_DEST )
   {

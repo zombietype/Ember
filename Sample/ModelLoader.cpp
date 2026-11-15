@@ -1026,7 +1026,6 @@ Ember::BottomLevelAS Ember::ModelLoader::CreateBottomLevelAS(
     auto const resource_desc = CD3DX12_RESOURCE_DESC::Buffer(
         blas_prebuild_info.ScratchDataSizeInBytes, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS );
 
-#if not defined( RENDERDOC_COMPAT )
     D3D12MA::ALLOCATION_DESC const allocation_desc = {
       .Flags    = D3D12MA::ALLOCATION_FLAG_NONE,
       .HeapType = D3D12_HEAP_TYPE_DEFAULT,
@@ -1041,16 +1040,6 @@ Ember::BottomLevelAS Ember::ModelLoader::CreateBottomLevelAS(
         IID_PPV_ARGS( &staging_res ) ) );
 
     cmd->Track( std::move( staging_alloc ) );
-#else
-    auto heap_property = CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_DEFAULT };
-    ERR_ABORT( m_RenderDevice->GetDevice()->CreateCommittedResource(
-        &heap_property,
-        D3D12_HEAP_FLAG_NONE,
-        &resource_desc,
-        D3D12_RESOURCE_STATE_COMMON,
-        nullptr,
-        IID_PPV_ARGS( &staging_res ) ) );
-#endif
   }
   cmd->Track( staging_res );
 

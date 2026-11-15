@@ -194,7 +194,6 @@ void AllocateBufferImpl(
 
   auto const                  heap_type   = use_rebar_heap ? D3D12_HEAP_TYPE_GPU_UPLOAD : D3D12_HEAP_TYPE_DEFAULT;
   // TODO: Buffer Allocation can fail. Handle by returning value.
-#if not defined( RENDERDOC_COMPAT )
   D3D12MA::ALLOCATION_DESC const allocation_desc = {
     .Flags    = D3D12MA::ALLOCATION_FLAG_NONE,
     .HeapType = heap_type,
@@ -202,16 +201,6 @@ void AllocateBufferImpl(
 
   ERR_ABORT( allocator->CreateResource(
       &allocation_desc, &buffer_desc, init_state, nullptr, allocation, IID_PPV_ARGS( resource ) ) );
-#else
-  auto const heap_properties = CD3DX12_HEAP_PROPERTIES{ heap_type };
-  ERR_ABORT( device->CreateCommittedResource(
-      &heap_properties,
-      D3D12_HEAP_FLAG_ALLOW_ALL_BUFFERS_AND_TEXTURES,
-      &buffer_desc,
-      init_state,
-      nullptr,
-      IID_PPV_ARGS( resource ) ) );
-#endif
 }
 } // namespace
 

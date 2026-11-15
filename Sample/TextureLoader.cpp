@@ -125,9 +125,8 @@ bool Ember::TextureLoader::TryLoadImpl(
   ComPtr<ID3D12Resource>      staging_res;
   ComPtr<D3D12MA::Allocation> staging_alloc;
   {
-    CD3DX12_RESOURCE_DESC const resource_desc = CD3DX12_RESOURCE_DESC::Buffer( req_size );
+    CD3DX12_RESOURCE_DESC const    resource_desc   = CD3DX12_RESOURCE_DESC::Buffer( req_size );
 
-#if not defined( RENDERDOC_COMPAT )
     D3D12MA::ALLOCATION_DESC const allocation_desc = {
       .Flags    = D3D12MA::ALLOCATION_FLAG_NONE,
       .HeapType = D3D12_HEAP_TYPE_UPLOAD,
@@ -144,18 +143,6 @@ bool Ember::TextureLoader::TryLoadImpl(
         false );
 
     m_CurrentCommandList.Track( std::move( staging_alloc ) );
-#else
-    auto heap_property = CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_UPLOAD };
-    ERR_FAIL_RET_V(
-        m_RenderDevice->GetDevice()->CreateCommittedResource(
-            &heap_property,
-            D3D12_HEAP_FLAG_NONE,
-            &resource_desc,
-            D3D12_RESOURCE_STATE_GENERIC_READ,
-            nullptr,
-            IID_PPV_ARGS( &staging_res ) ),
-        false );
-#endif
   }
 
   m_CurrentCommandList.Track( staging_res );
@@ -230,7 +217,11 @@ bool Ember::TextureLoader::TryLoadTexture(
   else
   {
     // TODO: This is dicey. Might wanna support "R" format etc.
-    DirectX::WIC_FLAGS const flags = DirectX::WIC_FLAGS_DEFAULT_SRGB | DirectX::WIC_FLAGS_FORCE_RGB;
+
+    DirectX::WIC_FLAGS const flags =
+        ( color_space_override == ColorSpaceOverride::kSrgb ? DirectX::WIC_FLAGS_DEFAULT_SRGB
+                                                            : DirectX::WIC_FLAGS_NONE ) |
+        DirectX::WIC_FLAGS_FORCE_RGB;
     ERR_FAIL_RET_F( LoadFromWICFile( wide_filename, flags, &metadata, scratch_image ) );
   }
 
@@ -254,7 +245,9 @@ bool Ember::TextureLoader::TryLoadTextureFromData(
 
   DirectX::TexMetadata     metadata;
   DirectX::ScratchImage    scratch_image;
-  DirectX::WIC_FLAGS const flags = DirectX::WIC_FLAGS_DEFAULT_SRGB | DirectX::WIC_FLAGS_FORCE_RGB;
+  DirectX::WIC_FLAGS const flags = ( color_space_override == ColorSpaceOverride::kSrgb ? DirectX::WIC_FLAGS_DEFAULT_SRGB
+                                                                                       : DirectX::WIC_FLAGS_NONE ) |
+                                   DirectX::WIC_FLAGS_FORCE_RGB;
   ERR_FAIL_RET_V( DirectX::LoadFromWICMemory( data, data_size, flags, &metadata, scratch_image ), false );
 
   return TryLoadImpl( texture, id, metadata, scratch_image, color_space_override, final_state );

@@ -22,11 +22,7 @@
 
 #include <cassert>
 
-#if not defined( RENDERDOC_COMPAT )
 #define DEBUG_BREAK __debugbreak()
-#else
-#define DEBUG_BREAK
-#endif
 
 #define ERR_FAIL_RET_V( EXPR, RET_VALUE )                                                                              \
   do                                                                                                                   \

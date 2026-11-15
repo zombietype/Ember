@@ -211,7 +211,6 @@ void Ember::TextureManager::CreateResourceImpl(
     D3D12_CLEAR_VALUE const*               clear_value,
     D3D12_RESOURCE_STATES const            initial_states ) const
 {
-#if not defined( RENDERDOC_COMPAT )
   D3D12MA::ALLOCATION_DESC const allocation_desc = {
     .Flags    = D3D12MA::ALLOCATION_FLAG_NONE,
     .HeapType = D3D12_HEAP_TYPE_DEFAULT,
@@ -219,11 +218,6 @@ void Ember::TextureManager::CreateResourceImpl(
 
   ERR_ABORT( m_Allocator->CreateResource(
       &allocation_desc, &resource_desc, initial_states, clear_value, allocation, IID_PPV_ARGS( texture ) ) );
-#else
-  auto const heap_properties = CD3DX12_HEAP_PROPERTIES{ D3D12_HEAP_TYPE_DEFAULT };
-  ERR_ABORT( m_Device->CreateCommittedResource(
-      &heap_properties, D3D12_HEAP_FLAG_NONE, &resource_desc, initial_states, clear_value, IID_PPV_ARGS( texture ) ) );
-#endif
 }
 
 std::shared_ptr<Ember::TextureImpl> Ember::TextureManager::CreateTextureImpl( TextureDesc const& desc )
