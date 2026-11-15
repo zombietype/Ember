@@ -70,7 +70,6 @@ enum class DeviceHandleType : uint8_t
 
 TYPED_DEVICE_HANDLE( SRV, BindlessManager );
 TYPED_DEVICE_HANDLE( UAV, BindlessManager );
-TYPED_DEVICE_HANDLE( CBV, BindlessManager );
 TYPED_DEVICE_HANDLE( Sampler, BindlessManager );
 TYPED_DEVICE_HANDLE( RawDescriptor, BindlessManager );
 

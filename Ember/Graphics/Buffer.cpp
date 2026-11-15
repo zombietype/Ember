@@ -13,11 +13,7 @@ struct BufferImpl
   {
     BindlessManager* Bindless; // Not owned; To be used with the handles
     SRVHandle        AsSRV;
-    union
-    {
-      UAVHandle AsUAV;
-      CBVHandle AsCBV;
-    };
+    UAVHandle        AsUAV;
 
     /*
      * Note about book-keeping:
@@ -43,18 +39,11 @@ struct BufferImpl
       : Bindless{ bindless }, AsSRV{ srv }, AsUAV{ uav }
     {}
 
-    Handles( BindlessManager* const bindless, CBVHandle const cbv ) : Bindless{ bindless }, AsSRV{}, AsCBV{ cbv }
-    {}
-
-    Handles( Handles&& other ) noexcept
-      : Bindless{ other.Bindless }
-      , AsSRV{ other.AsSRV }
-      , AsUAV{ other.AsUAV } // NOTE: this is semantically incorrect but works as CBV/UAV are plain indices.
+    Handles( Handles&& other ) noexcept : Bindless{ other.Bindless }, AsSRV{ other.AsSRV }, AsUAV{ other.AsUAV }
     {
       other.Bindless = nullptr;
       other.AsSRV    = {};
       other.AsUAV    = {};
-      other.AsCBV    = {};
     }
 
     Handles& operator=( Handles&& other ) noexcept
@@ -62,8 +51,6 @@ struct BufferImpl
       if ( this == &other ) return *this;
       std::swap( Bindless, other.Bindless );
       std::swap( AsSRV, other.AsSRV );
-
-      // NOTE: this is semantically incorrect but works as CBV/UAV are plain indices.
       std::swap( AsUAV, other.AsUAV );
 
       return *this;
@@ -77,14 +64,8 @@ struct BufferImpl
       if ( not Bindless ) return;
 
       Bindless->Free( AsSRV );
-      if ( IsConstantBuffer() )
-      {
-        Bindless->Free( AsCBV );
-      }
-      else
-      {
-        Bindless->Free( AsUAV );
-      }
+      ASSERT( not IsConstantBuffer() );
+      Bindless->Free( AsUAV );
     }
   };
 
@@ -150,15 +131,6 @@ Ember::UAVHandle Ember::Buffer::GetUAVHandle() const
   ASSERT( handle );
 
   return handle;
-}
-
-Ember::CBVHandle Ember::Buffer::GetCBVHandle() const
-{
-  ASSERT( m_Impl );
-  ASSERT( GetType() == Type::kConstantBuffer );
-  ASSERT( m_Impl->Handles.IsConstantBuffer() );
-
-  return m_Impl->Handles.AsCBV;
 }
 
 void Ember::Buffer::SetName( LPCWSTR const name ) const
@@ -342,20 +314,13 @@ Ember::Buffer Ember::BufferManager::CreateConstantBuffer( uint32_t const size )
   ComPtr<D3D12MA::Allocation> allocation;
   AllocateBufferImpl( m_Device.Get(), m_GpuAllocator.Get(), padded_size, &allocation, &buffer );
 
-  D3D12_CONSTANT_BUFFER_VIEW_DESC const desc = {
-    .BufferLocation = buffer->GetGPUVirtualAddress(),
-    .SizeInBytes    = padded_size,
-  };
-
-  auto const cbv_handle = m_Bindless->CreateDescriptorHandle( desc );
-
+  D3D12_GPU_VIRTUAL_ADDRESS const addr = buffer->GetGPUVirtualAddress();
   return Wrap( {
       .Resource   = std::move( buffer ),
       .Allocation = std::move( allocation ),
-      .GPUAddress = desc.BufferLocation,
+      .GPUAddress = addr,
       .Size       = size,
       .Type       = Buffer::Type::kConstantBuffer,
-      .Handles    = { m_Bindless, cbv_handle },
   } );
 }
 

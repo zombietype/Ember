@@ -104,7 +104,6 @@ public:
       D3D12_CPU_DESCRIPTOR_HANDLE* cpu_desc, D3D12_GPU_DESCRIPTOR_HANDLE* gpu_desc ) const noexcept;
 
   [[nodiscard]] std::array<ID3D12DescriptorHeap*, 2> GetBindlessDescriptorHeaps() const;
-  void                                               FreeHandle( CBVHandle handle ) const;
   void                                               FreeHandle( SRVHandle handle ) const;
   void                                               FreeHandle( UAVHandle handle ) const;
   void                                               FreeHandle( RawDescriptorHandle handle ) const;

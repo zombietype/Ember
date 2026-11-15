@@ -7,14 +7,6 @@ Ember::ResourceBinder::ResourceBinder( BindlessManager* bindless, std::pmr::poly
   : m_Bindless{ bindless }, m_UsedResources{ allocator }
 {}
 
-Ember::CBVHandle Ember::ResourceBinder::BindCBV( Buffer const& buffer ) noexcept
-{
-  auto handle = buffer.GetCBVHandle();
-  Track( buffer.GetBuffer() );
-
-  return handle;
-}
-
 Ember::SRVHandle Ember::ResourceBinder::BindSRV( Buffer const& buffer ) noexcept
 {
   auto handle = buffer.GetSRVHandle();

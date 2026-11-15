@@ -13,16 +13,6 @@
 
 #include <Util/StringUtil.hpp>
 
-namespace
-{
-struct PackedData
-{
-  Ember::SRVHandle LightData;
-  uint32_t         LightIdx;
-  Ember::CBVHandle CameraBuffer;
-};
-} // namespace
-
 Ember::SRVHandle Ember::Internal::DirectionLightManager::AllocateShadow()
 {
   if ( m_AllocatedShadows == m_ActiveShadows.size() )

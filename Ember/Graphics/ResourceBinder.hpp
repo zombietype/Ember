@@ -14,7 +14,7 @@ class RenderDevice;
 
 class ResourceBinder
 {
-  using VarHandle = std::variant<SRVHandle, UAVHandle, CBVHandle>;
+  using VarHandle = std::variant<SRVHandle, UAVHandle>;
   BindlessManager*                m_Bindless;
   std::pmr::set<ComPtr<IUnknown>> m_UsedResources;
   FlatMap<uint64_t, VarHandle>    m_TempHandles;
@@ -23,7 +23,6 @@ public:
   ResourceBinder() = default;
   ResourceBinder( BindlessManager* bindless, std::pmr::polymorphic_allocator<> const& resource );
 
-  CBVHandle BindCBV( Buffer const& buffer ) noexcept;
   SRVHandle BindSRV( Buffer const& buffer ) noexcept;
   UAVHandle BindUAV( Buffer const& buffer ) noexcept;
   SRVHandle BindSRV( Texture const& texture ) noexcept;

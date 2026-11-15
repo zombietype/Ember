@@ -40,7 +40,6 @@ public:
 
   [[nodiscard]] SRVHandle                 GetSRVHandle() const;
   [[nodiscard]] UAVHandle                 GetUAVHandle() const;
-  [[nodiscard]] CBVHandle                 GetCBVHandle() const;
   void                                    SetName( LPCWSTR name ) const;
 
   [[nodiscard]] D3D12_GPU_VIRTUAL_ADDRESS GetGPUVirtualAddress() const;

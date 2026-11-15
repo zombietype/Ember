@@ -38,7 +38,6 @@ public:
 
   static void Create( BindlessManager* bindless, ID3D12Device2& device, uint32_t max_resources, uint32_t max_samplers );
 
-  [[nodiscard]] CBVHandle CreateDescriptorHandle( D3D12_CONSTANT_BUFFER_VIEW_DESC const& cbv_desc );
   [[nodiscard]] SRVHandle CreateDescriptorHandle(
       ID3D12Resource* resource, D3D12_SHADER_RESOURCE_VIEW_DESC const& srv_desc );
   [[nodiscard]] UAVHandle CreateDescriptorHandle(
@@ -52,7 +51,6 @@ public:
 
   void                                               Free( SRVHandle handle );
   void                                               Free( UAVHandle handle );
-  void                                               Free( CBVHandle handle );
   void                                               Free( RawDescriptorHandle handle );
   void                                               Free( SamplerHandle handle );
 
